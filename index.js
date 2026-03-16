@@ -21,7 +21,7 @@ text:msg
 
 async function getLastResults(){
 
-let res = await fetch("LINK_WEB_KQ")
+let res = await fetch("https://660071.com/#/home/AllLotteryGames/K3?typeId=9")
 let html = await res.text()
 
 const $ = cheerio.load(html)
