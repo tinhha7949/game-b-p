@@ -1,0 +1,92 @@
+function getLastResults(){
+
+let rows=document.querySelectorAll(".van-row");
+let arr=[];
+
+rows.forEach(r=>{
+let t=r.innerText.trim().split("\n");
+
+if(t.length>=2){
+let n=parseInt(t[1]);
+if(!isNaN(n) && n>=3 && n<=18) arr.push(n);
+}
+
+});
+
+return arr;
+}
+
+function predict(){
+
+let data=getLastResults();
+
+if(data.length<5){
+console.clear();
+console.log("Chưa lấy được kết quả từ web...");
+return;
+}
+
+let last5=data.slice(0,5);
+let last300=data.slice(0,300);
+
+let big=last300.filter(x=>x>=11).length;
+let small=last300.filter(x=>x<=10).length;
+
+let even=last300.filter(x=>x%2==0).length;
+let odd=last300.filter(x=>x%2==1).length;
+
+let freq={};
+let score={};
+
+for(let i=3;i<=18;i++){
+freq[i]=0;
+score[i]=0;
+}
+
+last300.forEach(n=>{
+if(freq[n]!==undefined){
+freq[n]++;
+}
+});
+
+for(let i=6;i<=15;i++){   // CHỈ tính điểm cho 6 → 15
+
+score[i]+=freq[i]*2;
+
+if(big>small && i>=11) score[i]+=3;
+if(small>big && i<=10) score[i]+=3;
+
+if(even>odd && i%2==0) score[i]+=2;
+if(odd>even && i%2==1) score[i]+=2;
+
+if(!last5.includes(i)) score[i]+=1;
+
+}
+
+let sortedScore=Object.entries(score)
+.filter(x=>x[0]>=6 && x[0]<=15)
+.sort((a,b)=>b[1]-a[1]);
+
+let top4=sortedScore.slice(0,4).map(x=>x[0]);
+let top2=sortedScore.slice(0,2).map(x=>x[0]);
+
+console.clear();
+
+console.log("5 KQ gần nhất:",last5);
+
+console.log("300 KQ:");
+console.log("LỚN:",big,"NHỎ:",small);
+console.log("CHẴN:",even,"LẺ:",odd);
+
+console.log("Dự đoán cửa:");
+console.log(big>small?"→ LỚN":"→ NHỎ");
+console.log(even>odd?"→ CHẴN":"→ LẺ");
+
+console.log("🔥 4 SỐ KHẢ NĂNG CAO (6-15):",top4);
+
+console.log("⭐ 2 SỐ KHẢ NĂNG CAO NHẤT:",top2);
+
+}
+
+predict();
+setInterval(predict,5000);
