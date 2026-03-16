@@ -1,5 +1,5 @@
 import fetch from "node-fetch"
-import cheerio from "cheerio"
+import * as cheerio from "cheerio"
 
 const TOKEN = "BOT_TOKEN"
 const CHAT_ID = "CHAT_ID"
