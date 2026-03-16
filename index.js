@@ -1,40 +1,42 @@
-const fetch=require("node-fetch")
-const TelegramBot=require("node-telegram-bot-api")
-const cheerio=require("cheerio")
+import fetch from "node-fetch"
+import cheerio from "cheerio"
 
-const BOT_TOKEN="TOKEN_BOT"
-const CHAT_ID="CHAT_ID"
+const TOKEN = "BOT_TOKEN"
+const CHAT_ID = "CHAT_ID"
 
-const bot=new TelegramBot(BOT_TOKEN,{polling:false})
-
-let lastResult=null
+let lastResult = null
 
 async function sendTelegram(msg){
 
-await bot.sendMessage(CHAT_ID,msg)
+await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`,{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+chat_id:CHAT_ID,
+text:msg
+})
+})
 
 }
 
 async function getLastResults(){
 
-try{
+let res = await fetch("LINK_WEB_KQ")
+let html = await res.text()
 
-let res=await fetch("LINK_WEB_KET_QUA")
-let html=await res.text()
-
-const $=cheerio.load(html)
+const $ = cheerio.load(html)
 
 let arr=[]
 
 $(".van-row").each((i,el)=>{
 
-let text=$(el).text().trim().split("\n")
+let t=$(el).text().trim().split("\n")
 
-if(text.length>=2){
+if(t.length>=2){
 
-let n=parseInt(text[1])
+let n=parseInt(t[1])
 
-if(!isNaN(n)&&n>=3&&n<=18){
+if(!isNaN(n) && n>=3 && n<=18){
 arr.push(n)
 }
 
@@ -44,15 +46,9 @@ arr.push(n)
 
 return arr
 
-}catch(e){
-
-return []
-
 }
 
-}
-
-function analyze(data){
+function predict(data){
 
 let last5=data.slice(0,5)
 let last300=data.slice(0,300)
@@ -72,7 +68,9 @@ score[i]=0
 }
 
 last300.forEach(n=>{
-if(freq[n]!=undefined) freq[n]++
+if(freq[n]!==undefined){
+freq[n]++
+}
 })
 
 for(let i=6;i<=15;i++){
@@ -96,49 +94,59 @@ let sortedScore=Object.entries(score)
 let top4=sortedScore.slice(0,4).map(x=>x[0])
 let top2=sortedScore.slice(0,2).map(x=>x[0])
 
-let msg=`
-🎲 KẾT QUẢ MỚI
-
-5 KQ gần nhất:
-${last5.join(",")}
-
-Cửa:
-${big>small?"LỚN":"NHỎ"}
-${even>odd?"CHẴN":"LẺ"}
-
-🔥 4 số mạnh:
-${top4.join(",")}
-
-⭐ 2 số mạnh nhất:
-${top2.join(",")}
-`
-
-return msg
+return {
+last:last5[0],
+big,
+small,
+even,
+odd,
+top4,
+top2
+}
 
 }
 
-async function main(){
+async function run(){
 
-console.log("BOT đang chạy...")
-
-setInterval(async()=>{
+try{
 
 let data=await getLastResults()
 
-if(data.length<5) return
+if(data.length<5){
+console.log("Chưa có dữ liệu...")
+return
+}
 
-let newest=data[0]
+let result=predict(data)
 
-if(newest===lastResult) return
+if(result.last!=lastResult){
 
-lastResult=newest
+lastResult=result.last
 
-let msg=analyze(data)
+let msg=
+`KQ MỚI: ${result.last}
 
-await sendTelegram(msg)
+LỚN:${result.big} NHỎ:${result.small}
+CHẴN:${result.even} LẺ:${result.odd}
 
-},5000)
+🔥 4 SỐ: ${result.top4.join(" - ")}
+
+⭐ 2 SỐ MẠNH: ${result.top2.join(" - ")}`
+
+console.log(msg)
+
+sendTelegram(msg)
 
 }
 
-main()
+}catch(e){
+
+console.log("Lỗi:",e)
+
+}
+
+}
+
+setInterval(run,5000)
+
+console.log("Bot đang chạy...")
