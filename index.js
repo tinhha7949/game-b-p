@@ -1,32 +1,48 @@
-import fetch from "node-fetch"
+const fetch=require("node-fetch")
+const TelegramBot=require("node-telegram-bot-api")
+const cheerio=require("cheerio")
 
-const BOT_TOKEN="BOT_TOKEN"
+const BOT_TOKEN="TOKEN_BOT"
 const CHAT_ID="CHAT_ID"
+
+const bot=new TelegramBot(BOT_TOKEN,{polling:false})
 
 let lastResult=null
 
-async function sendTelegram(text){
+async function sendTelegram(msg){
 
-await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
-method:"POST",
-headers:{ "Content-Type":"application/json"},
-body:JSON.stringify({
-chat_id:CHAT_ID,
-text:text
-})
-})
+await bot.sendMessage(CHAT_ID,msg)
 
 }
 
-async function getResults(){
+async function getLastResults(){
 
 try{
 
-let res=await fetch("LINK_API_KET_QUA_WEB")
+let res=await fetch("LINK_WEB_KET_QUA")
+let html=await res.text()
 
-let data=await res.json()
+const $=cheerio.load(html)
 
-return data
+let arr=[]
+
+$(".van-row").each((i,el)=>{
+
+let text=$(el).text().trim().split("\n")
+
+if(text.length>=2){
+
+let n=parseInt(text[1])
+
+if(!isNaN(n)&&n>=3&&n<=18){
+arr.push(n)
+}
+
+}
+
+})
+
+return arr
 
 }catch(e){
 
@@ -73,28 +89,28 @@ if(!last5.includes(i)) score[i]+=1
 
 }
 
-let sorted=Object.entries(score)
+let sortedScore=Object.entries(score)
 .filter(x=>x[0]>=6 && x[0]<=15)
 .sort((a,b)=>b[1]-a[1])
 
-let top4=sorted.slice(0,4).map(x=>x[0])
-let top2=sorted.slice(0,2).map(x=>x[0])
+let top4=sortedScore.slice(0,4).map(x=>x[0])
+let top2=sortedScore.slice(0,2).map(x=>x[0])
 
 let msg=`
 🎲 KẾT QUẢ MỚI
 
 5 KQ gần nhất:
-${last5.join(", ")}
+${last5.join(",")}
 
-Cửa dự đoán:
+Cửa:
 ${big>small?"LỚN":"NHỎ"}
 ${even>odd?"CHẴN":"LẺ"}
 
 🔥 4 số mạnh:
-${top4.join(", ")}
+${top4.join(",")}
 
 ⭐ 2 số mạnh nhất:
-${top2.join(", ")}
+${top2.join(",")}
 `
 
 return msg
@@ -103,19 +119,19 @@ return msg
 
 async function main(){
 
-console.log("Bot đang chạy...")
+console.log("BOT đang chạy...")
 
 setInterval(async()=>{
 
-let data=await getResults()
+let data=await getLastResults()
 
 if(data.length<5) return
 
-let last=data[0]
+let newest=data[0]
 
-if(last===lastResult) return
+if(newest===lastResult) return
 
-lastResult=last
+lastResult=newest
 
 let msg=analyze(data)
 
