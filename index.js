@@ -1,10 +1,9 @@
-import fetch from "node-fetch"
-import * as cheerio from "cheerio"
+const puppeteer = require("puppeteer")
 
-const TOKEN = "BOT_TOKEN"
-const CHAT_ID = "CHAT_ID"
+const TOKEN="BOT_TOKEN"
+const CHAT_ID="CHAT_ID"
 
-let lastResult = null
+let lastResult=null
 
 async function sendTelegram(msg){
 
@@ -16,45 +15,6 @@ chat_id:CHAT_ID,
 text:msg
 })
 })
-
-}
-
-async function getLastResults(){
-
-try{
-
-let res = await fetch("https://660071.com/#/home/AllLotteryGames/K3?typeId=9",{
-headers:{
-"user-agent":"Mozilla/5.0"
-}
-})
-
-let html = await res.text()
-
-const $ = cheerio.load(html)
-
-let arr=[]
-
-$(".van-row .van-col--1 span").each((i,el)=>{
-
-let num=$(el).text().trim()
-
-let n=parseInt(num)
-
-if(!isNaN(n) && n>=3 && n<=18){
-arr.push(n)
-}
-
-})
-
-return arr
-
-}catch(e){
-
-console.log("Lỗi lấy dữ liệu:",e)
-return []
-
-}
 
 }
 
@@ -104,7 +64,7 @@ let sortedScore=Object.entries(score)
 let top4=sortedScore.slice(0,4).map(x=>x[0])
 let top2=sortedScore.slice(0,2).map(x=>x[0])
 
-return {
+return{
 last:last5[0],
 big,
 small,
@@ -118,12 +78,50 @@ top2
 
 async function run(){
 
-let data=await getLastResults()
+const browser=await puppeteer.launch({
+args:["--no-sandbox","--disable-setuid-sandbox"]
+})
 
-if(data.length<5){
-console.log("Chưa có dữ liệu...")
-return
+const page=await browser.newPage()
+
+await page.goto("https://660071.com/#/home/AllLotteryGames/K3?typeId=9")
+
+await page.waitForTimeout(5000)
+
+let data=await page.evaluate(()=>{
+
+function getLastResults(){
+
+let rows=document.querySelectorAll(".van-row")
+let arr=[]
+
+rows.forEach(r=>{
+
+let t=r.innerText.trim().split("\n")
+
+if(t.length>=2){
+
+let n=parseInt(t[1])
+
+if(!isNaN(n) && n>=3 && n<=18){
+arr.push(n)
 }
+
+}
+
+})
+
+return arr
+
+}
+
+return getLastResults()
+
+})
+
+await browser.close()
+
+if(data.length<5) return
 
 let result=predict(data)
 
@@ -132,14 +130,19 @@ if(result.last!==lastResult){
 lastResult=result.last
 
 let msg=
+
 `KQ MỚI: ${result.last}
 
-LỚN:${result.big}  NHỎ:${result.small}
-CHẴN:${result.even}  LẺ:${result.odd}
+5 KQ: ${data.slice(0,5).join(" - ")}
 
-🔥 4 SỐ: ${result.top4.join(" - ")}
+LỚN:${result.big}   NHỎ:${result.small}
+CHẴN:${result.even}   LẺ:${result.odd}
 
-⭐ 2 SỐ MẠNH: ${result.top2.join(" - ")}`
+🔥 4 SỐ KHẢ NĂNG CAO:
+${result.top4.join(" - ")}
+
+⭐ 2 SỐ MẠNH NHẤT:
+${result.top2.join(" - ")}`
 
 console.log(msg)
 
@@ -149,6 +152,6 @@ sendTelegram(msg)
 
 }
 
-console.log("Bot đang chạy...")
+console.log("BOT START")
 
 setInterval(run,5000)
