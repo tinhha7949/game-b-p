@@ -1,157 +1,138 @@
-const puppeteer = require("puppeteer")
+const Parser = require("rss-parser")
+const parser = new Parser()
 
-const TOKEN="BOT_TOKEN"
-const CHAT_ID="CHAT_ID"
+const BOT_TOKEN = process.env.BOT_TOKEN
+const CHAT_ID = process.env.CHAT_ID
 
-let lastResult=null
+let sentNews = new Set()
 
+// ================= TELEGRAM =================
 async function sendTelegram(msg){
-
-await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`,{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-chat_id:CHAT_ID,
-text:msg
-})
-})
-
+    try{
+        let url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`
+        await fetch(url,{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body: JSON.stringify({ chat_id: CHAT_ID, text: msg })
+        })
+    }catch(e){
+        console.log("❌ TELE:", e.message)
+    }
 }
 
-function predict(data){
+// ================= FILTER =================
+function analyzeNews(title){
 
-let last5=data.slice(0,5)
-let last300=data.slice(0,300)
+    let t = title.toLowerCase()
 
-let big=last300.filter(x=>x>=11).length
-let small=last300.filter(x=>x<=10).length
+    let tag = "📈 STOCK"
 
-let even=last300.filter(x=>x%2==0).length
-let odd=last300.filter(x=>x%2==1).length
+    // 🏦 Vĩ mô mạnh
+    if(
+        t.includes("fed") || t.includes("fomc") ||
+        t.includes("cpi") || t.includes("inflation") ||
+        t.includes("lãi suất") || t.includes("interest rate")
+    ){
+        tag = "🏦 MACRO"
+    }
 
-let freq={}
-let score={}
+    // 🌍 Địa chính trị
+    else if(
+        t.includes("war") || t.includes("trung quốc") ||
+        t.includes("china") || t.includes("russia")
+    ){
+        tag = "🌍 GEO"
+    }
 
-for(let i=3;i<=18;i++){
-freq[i]=0
-score[i]=0
+    // 🛢️ Hàng hóa
+    else if(
+        t.includes("oil") || t.includes("dầu") ||
+        t.includes("gold") || t.includes("vàng") ||
+        t.includes("usd") || t.includes("dollar")
+    ){
+        tag = "🛢️ COMMODITY"
+    }
+
+    // 📊 Thị trường
+    else if(
+        t.includes("nasdaq") ||
+        t.includes("dow jones") ||
+        t.includes("s&p") ||
+        t.includes("vnindex") ||
+        t.includes("vn-index")
+    ){
+        tag = "📊 MARKET"
+    }
+
+    // ❌ lọc rác
+    let isImportant =
+        t.includes("chứng khoán") ||
+        t.includes("cổ phiếu") ||
+        t.includes("vnindex") ||
+        t.includes("fed") ||
+        t.includes("cpi") ||
+        t.includes("inflation") ||
+        t.includes("lãi suất") ||
+        t.includes("nasdaq") ||
+        t.includes("dow jones") ||
+        t.includes("oil") ||
+        t.includes("gold") ||
+        t.includes("usd") ||
+        t.includes("war") ||
+        t.includes("china")
+
+    return { isImportant, tag }
 }
 
-last300.forEach(n=>{
-if(freq[n]!==undefined){
-freq[n]++
-}
-})
+// ================= FETCH =================
+async function fetchNews(){
 
-for(let i=6;i<=15;i++){
+    console.log("📰 Checking NEWS...")
 
-score[i]+=freq[i]*2
+    try{
 
-if(big>small && i>=11) score[i]+=3
-if(small>big && i<=10) score[i]+=3
+        let feeds = [
+            // 🇻🇳 Việt Nam
+            "https://vnexpress.net/rss/kinh-doanh.rss",
+            "https://cafef.vn/thi-truong-chung-khoan.rss",
 
-if(even>odd && i%2==0) score[i]+=2
-if(odd>even && i%2==1) score[i]+=2
+            // 🌍 Quốc tế mạnh
+            "https://feeds.bloomberg.com/markets/news.rss",
+            "https://www.investing.com/rss/news_25.rss",
+            "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+        ]
 
-if(!last5.includes(i)) score[i]+=1
+        for(let url of feeds){
 
-}
+            let feed = await parser.parseURL(url)
 
-let sortedScore=Object.entries(score)
-.filter(x=>x[0]>=6 && x[0]<=15)
-.sort((a,b)=>b[1]-a[1])
+            for(let item of feed.items.slice(0,5)){
 
-let top4=sortedScore.slice(0,4).map(x=>x[0])
-let top2=sortedScore.slice(0,2).map(x=>x[0])
+                let id = item.link
+                if(sentNews.has(id)) continue
 
-return{
-last:last5[0],
-big,
-small,
-even,
-odd,
-top4,
-top2
-}
+                let { isImportant, tag } = analyzeNews(item.title)
 
-}
+                if(!isImportant) continue
 
-async function run(){
+                sentNews.add(id)
 
-const browser=await puppeteer.launch({
-args:["--no-sandbox","--disable-setuid-sandbox"]
-})
+                let msg = `${tag} NEWS
 
-const page=await browser.newPage()
+📰 ${item.title}
 
-await page.goto("https://660071.com/#/home/AllLotteryGames/K3?typeId=9")
+🔗 ${item.link}`
 
-await page.waitForTimeout(5000)
+                console.log(msg)
+                await sendTelegram(msg)
+            }
+        }
 
-let data=await page.evaluate(()=>{
-
-function getLastResults(){
-
-let rows=document.querySelectorAll(".van-row")
-let arr=[]
-
-rows.forEach(r=>{
-
-let t=r.innerText.trim().split("\n")
-
-if(t.length>=2){
-
-let n=parseInt(t[1])
-
-if(!isNaN(n) && n>=3 && n<=18){
-arr.push(n)
+    }catch(e){
+        console.log("❌ NEWS:", e.message)
+    }
 }
 
-}
-
-})
-
-return arr
-
-}
-
-return getLastResults()
-
-})
-
-await browser.close()
-
-if(data.length<5) return
-
-let result=predict(data)
-
-if(result.last!==lastResult){
-
-lastResult=result.last
-
-let msg=
-
-`KQ MỚI: ${result.last}
-
-5 KQ: ${data.slice(0,5).join(" - ")}
-
-LỚN:${result.big}   NHỎ:${result.small}
-CHẴN:${result.even}   LẺ:${result.odd}
-
-🔥 4 SỐ KHẢ NĂNG CAO:
-${result.top4.join(" - ")}
-
-⭐ 2 SỐ MẠNH NHẤT:
-${result.top2.join(" - ")}`
-
-console.log(msg)
-
-sendTelegram(msg)
-
-}
-
-}
-
-console.log("BOT START")
-
-setInterval(run,5000)
+// ================= LOOP =================
+setInterval(fetchNews, 600000) // 10 phút
+fetchNews()
